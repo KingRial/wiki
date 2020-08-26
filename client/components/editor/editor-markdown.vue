@@ -139,7 +139,7 @@
           span {{$t('editor:markup.insertVideoAudio')}}
         v-tooltip(right, color='teal')
           template(v-slot:activator='{ on }')
-            v-btn.mt-3.animated.fadeInLeft.wait-p5s(icon, tile, v-on='on', dark, disabled).mx-0
+            v-btn.mt-3.animated.fadeInLeft.wait-p5s(icon, tile, v-on='on', dark, @click='toggleModal(`editorModalDrawio`)').mx-0
               v-icon mdi-chart-multiline
           span {{$t('editor:markup.insertDiagram')}}
         v-tooltip(right, color='teal')
@@ -217,6 +217,10 @@ import 'codemirror/addon/display/fullscreen.css'
 import 'codemirror/addon/selection/mark-selection.js'
 import 'codemirror/addon/search/searchcursor.js'
 import 'codemirror/addon/hint/show-hint.js'
+import 'codemirror/addon/fold/foldcode.js'
+import 'codemirror/addon/fold/foldgutter.js'
+import 'codemirror/addon/fold/foldgutter.css'
+import './markdown/fold'
 
 // Markdown-it
 import MarkdownIt from 'markdown-it'
@@ -272,7 +276,9 @@ const md = new MarkdownIt({
   linkify: true,
   typography: true,
   highlight(str, lang) {
-    if (['mermaid', 'plantuml'].includes(lang)) {
+    if (lang === 'diagram') {
+      return `<pre class="diagram">` + Buffer.from(str, 'base64').toString() + `</pre>`
+    } else if (['mermaid', 'plantuml'].includes(lang)) {
       return `<pre class="codeblock-${lang}"><code>${_.escape(str)}</code></pre>`
     } else {
       return `<pre class="line-numbers"><code class="language-${lang}">${_.escape(str)}</code></pre>`
@@ -430,17 +436,8 @@ export default {
       this.helpShown = false
     },
     onCmInput: _.debounce(function (newContent) {
-      linesMap = []
-      this.$store.set('editor/content', newContent)
-      this.previewHTML = DOMPurify.sanitize(md.render(newContent))
-      this.$nextTick(() => {
-        tabsetHelper.format()
-        this.renderMermaidDiagrams()
-        Prism.highlightAllUnder(this.$refs.editorPreview)
-        Array.from(this.$refs.editorPreview.querySelectorAll('pre.line-numbers')).forEach(pre => pre.classList.add('prismjs'))
-        this.scrollSync(this.cm)
-      })
-    }, 500),
+      this.processContent(newContent)
+    }, 600),
     onCmPaste (cm, ev) {
       // const clipItems = (ev.clipboardData || ev.originalEvent.clipboardData).items
       // for (let clipItem of clipItems) {
@@ -457,6 +454,19 @@ export default {
       //     reader.readAsDataURL(file)
       //   }
       // }
+    },
+    processContent (newContent) {
+      linesMap = []
+      // this.$store.set('editor/content', newContent)
+      this.processMarkers(this.cm.firstLine(), this.cm.lastLine())
+      this.previewHTML = DOMPurify.sanitize(md.render(newContent))
+      this.$nextTick(() => {
+        tabsetHelper.format()
+        this.renderMermaidDiagrams()
+        Prism.highlightAllUnder(this.$refs.editorPreview)
+        Array.from(this.$refs.editorPreview.querySelectorAll('pre.line-numbers')).forEach(pre => pre.classList.add('prismjs'))
+        this.scrollSync(this.cm)
+      })
     },
     /**
      * Update cursor state
@@ -652,6 +662,67 @@ export default {
       this.insertAtCursor({
         content: siteLangs.length > 0 ? `[${lastPart}](/${locale}/${path})` : `[${lastPart}](/${path})`
       })
+    },
+    processMarkers (from, to) {
+      let found = null
+      let foundStart = 0
+      this.cm.doc.getAllMarks().forEach(mk => {
+        if (mk.__kind) {
+          mk.clear()
+        }
+      })
+      this.cm.eachLine(from, to, ln => {
+        const line = ln.lineNo()
+        if (ln.text.startsWith('```diagram')) {
+          found = 'diagram'
+          foundStart = line
+        } else if (ln.text === '```' && found) {
+          switch (found) {
+            // ------------------------------
+            // -> DIAGRAM
+            // ------------------------------
+            case 'diagram': {
+              if (line - foundStart !== 2) {
+                return
+              }
+              this.addMarker({
+                kind: 'diagram',
+                from: { line: foundStart, ch: 3 },
+                to: { line: foundStart, ch: 10 },
+                text: 'Edit Diagram',
+                action: ((start, end) => {
+                  return (ev) => {
+                    this.cm.doc.setSelection({ line: start, ch: 0 }, { line: end, ch: 3 })
+                    try {
+                      const raw = this.cm.doc.getLine(end - 1)
+                      this.$store.set('editor/activeModalData', Buffer.from(raw, 'base64').toString())
+                      this.toggleModal(`editorModalDrawio`)
+                    } catch (err) {
+                      return this.$store.commit('showNotification', {
+                        message: 'Failed to process diagram data.',
+                        style: 'warning',
+                        icon: 'warning'
+                      })
+                    }
+                  }
+                })(foundStart, line)
+              })
+              if (ln.height > 0) {
+                this.cm.foldCode(foundStart)
+              }
+              break
+            }
+          }
+          found = null
+        }
+      })
+    },
+    addMarker ({ kind, from, to, text, action }) {
+      const markerElm = document.createElement('span')
+      markerElm.appendChild(document.createTextNode(text))
+      markerElm.className = 'CodeMirror-buttonmarker'
+      markerElm.addEventListener('click', action)
+      this.cm.markText(from, to, { replacedWith: markerElm, __kind: kind })
     }
   },
   mounted() {
@@ -683,7 +754,9 @@ export default {
       viewportMargin: 50,
       inputStyle: 'contenteditable',
       allowDropFileTypes: ['image/jpg', 'image/png', 'image/svg', 'image/jpeg', 'image/gif'],
-      direction: siteConfig.rtl ? 'rtl' : 'ltr'
+      direction: siteConfig.rtl ? 'rtl' : 'ltr',
+      foldGutter: true,
+      gutters: ['CodeMirror-linenumbers', 'CodeMirror-foldgutter']
     })
     this.cm.setValue(this.$store.get('editor/content'))
     this.cm.on('change', c => {
@@ -747,7 +820,7 @@ export default {
 
     // Render initial preview
 
-    this.onCmInput(this.$store.get('editor/content'))
+    this.processContent(this.$store.get('editor/content'))
     this.refresh()
 
     this.$root.$on('editorInsert', opts => {
@@ -765,6 +838,12 @@ export default {
           this.insertAtCursor({
             content: `[${opts.text}](${opts.path})`
           })
+          break
+        case 'DIAGRAM':
+          const selStartLine = this.cm.getCursor('from').line
+          const selEndLine = this.cm.getCursor('to').line + 1
+          this.cm.doc.replaceSelection('```diagram\n' + opts.text + '\n```\n', 'start')
+          this.processMarkers(selStartLine, selEndLine)
           break
       }
     })
