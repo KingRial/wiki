@@ -1,0 +1,28 @@
+// TODO: remove the following rules when updating to v2.5.0+
+
+// Hiding tabs from "Property page" since they are all disabled or "coming soon"
+.v-item-group[role="tablist"] {
+  display: none !important;
+}
+
+// Hiding "Coming soon" items from "/e/it/new-page" - Editor Types
+.v-dialog > .radius-7:nth-child(2) {
+  .flex.xs4:nth-child(1),
+  .flex.xs4:nth-child(2),
+  .flex.xs4:nth-child(5) {
+    display: none !important;
+  }
+}
+
+// Hiding "Coming soon" items from "/e/it/new-page" - Custom view
+.v-dialog > .radius-7:nth-child(3) {
+  .flex.xs4:nth-child(2),
+  .flex.xs4:nth-child(3) {
+    display: none !important;
+  }
+}
+
+// Hiding "Coming soon" items from "/e/it/new-page" - Convert
+.v-dialog > .radius-7:nth-child(4) {
+  display: none !important;
+}
