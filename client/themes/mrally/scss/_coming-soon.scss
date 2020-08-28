@@ -1,5 +1,12 @@
 // TODO: remove the following rules when updating to v2.5.0+
 
+// Hiding "forgot password" since it's not supported on current version
+.login {
+  a[href="#forgot"] {
+    display: none !important;
+  }
+}
+
 // Hiding tabs from "Property page" since they are all disabled or "coming soon"
 .v-item-group[role="tablist"] {
   display: none !important;
