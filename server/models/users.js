@@ -718,13 +718,13 @@ module.exports = class User extends Model {
             to: email,
             subject: 'Verify your account',
             data: {
-              preheadertext: 'Verify your account in order to gain access to the wiki.',
+              preheadertext: 'Verify your account in order to gain access to ' + WIKI.config.company,
               title: 'Verify your account',
-              content: 'Click the button below in order to verify your account and gain access to the wiki.',
+              content: 'Click the button below in order to verify your account and gain access to ' + WIKI.config.company + '.',
               buttonLink: `${WIKI.config.host}/verify/${verificationToken}`,
               buttonText: 'Verify'
             },
-            text: `You must open the following link in your browser to verify your account and gain access to the wiki: ${WIKI.config.host}/verify/${verificationToken}`
+            text: `You must open the following link in your browser to verify your account and gain access to ' + WIKI.config.company + ': ${WIKI.config.host}/verify/${verificationToken}`
           })
         }
         return true
