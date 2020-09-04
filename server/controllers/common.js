@@ -36,6 +36,20 @@ router.get('/healthz', (req, res, next) => {
  * Administration
  */
 router.get(['/a', '/a/*'], (req, res, next) => {
+  if (!WIKI.auth.checkAccess(req.user, [
+    'manage:system',
+    'write:users',
+    'manage:users',
+    'write:groups',
+    'manage:groups',
+    'manage:navigation',
+    'manage:theme',
+    'manage:api'
+  ])) {
+    _.set(res.locals, 'pageMeta.title', 'Unauthorized')
+    return res.status(403).render('unauthorized', { action: 'view' })
+  }
+
   _.set(res.locals, 'pageMeta.title', 'Admin')
   res.render('admin')
 })
@@ -45,7 +59,7 @@ router.get(['/a', '/a/*'], (req, res, next) => {
  */
 router.get(['/d', '/d/*'], async (req, res, next) => {
   const pageArgs = pageHelper.parsePath(req.path, { stripExt: true })
-
+  
   const versionId = (req.query.v) ? _.toSafeInteger(req.query.v) : 0
 
   const page = await WIKI.models.pages.getPageFromDb({
@@ -93,6 +107,8 @@ router.get(['/e', '/e/*'], async (req, res, next) => {
     return res.redirect(`/e/${pageArgs.locale}/${pageArgs.path}`)
   }
 
+  req.i18n.changeLanguage(pageArgs.locale)
+  
   // -> Set Editor Lang
   _.set(res, 'locals.siteConfig.lang', pageArgs.locale)
   _.set(res, 'locals.siteConfig.rtl', req.i18n.dir() === 'rtl')
@@ -223,6 +239,8 @@ router.get(['/h', '/h/*'], async (req, res, next) => {
   if (WIKI.config.lang.namespacing && !pageArgs.explicitLocale) {
     return res.redirect(`/h/${pageArgs.locale}/${pageArgs.path}`)
   }
+  
+  req.i18n.changeLanguage(pageArgs.locale)
 
   _.set(res, 'locals.siteConfig.lang', pageArgs.locale)
   _.set(res, 'locals.siteConfig.rtl', req.i18n.dir() === 'rtl')
